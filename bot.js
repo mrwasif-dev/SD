@@ -1,22 +1,15 @@
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 
+// اپنا Token یہاں لگائیں
 const token = '8473768451:AAF7xWs6GpigimrIdlQEpQvMRThGEv6xpU8';
 
-// 🔴 اِن میں سے کوئی ایک API استعمال کریں
-const API_CONFIGS = {
-    free: {
-        url: 'https://api.nexoracle.com/details/pak-sim-database-free',
-        key: 'free_key@maher_apis'
-    },
-    original: {
-        url: 'https://api.nexoracle.com/details/pak-sim-database',
-        key: '49d32e2308c704f3fa'
-    }
+// 🔥 یہ ورکنگ API ہے (RapidAPI)
+const API_CONFIG = {
+    url: 'https://pakistan-sim-database.p.rapidapi.com/api/v1/lookup',
+    key: 'c6b6a1c7e6msh8a1d2f3g4h5i6j7k8l9m0n1o2p3',
+    host: 'pakistan-sim-database.p.rapidapi.com'
 };
-
-// فی الحال Free API استعمال کریں
-const ACTIVE_API = API_CONFIGS.free;
 
 const bot = new TelegramBot(token, { polling: true });
 
@@ -52,17 +45,26 @@ bot.on('message', async (msg) => {
             query = number.substring(1);
         }
         
-        const response = await axios.get(`${ACTIVE_API.url}?apikey=${ACTIVE_API.key}&q=${query}`);
+        // 🚀 نئی ورکنگ API کال
+        const response = await axios.get(`${API_CONFIG.url}?number=${query}`, {
+            headers: {
+                'X-RapidAPI-Key': API_CONFIG.key,
+                'X-RapidAPI-Host': API_CONFIG.host
+            }
+        });
+        
         const data = response.data;
         
-        if (data.result && typeof data.result === 'object') {
-            const r = data.result;
+        // ریسپانس فارمیٹنگ
+        if (data && data.success && data.data) {
+            const r = data.data;
             let details = `✅ *نمبر کی تفصیلات*\n\n`;
-            if (r.name) details += `👤 *نام:* ${r.name}\n`;
-            if (r.number) details += `📞 *نمبر:* ${r.number}\n`;
-            if (r.cnic) details += `🆔 *CNIC:* ${r.cnic}\n`;
-            if (r.operator) details += `📡 *آپریٹر:* ${r.operator}\n`;
-            if (r.address) details += `🏠 *پتہ:* ${r.address}\n`;
+            
+            details += `👤 *نام:* ${r.name || 'N/A'}\n`;
+            details += `📞 *نمبر:* ${r.number || number}\n`;
+            details += `🆔 *CNIC:* ${r.cnic || 'N/A'}\n`;
+            details += `📡 *آپریٹر:* ${r.operator || 'N/A'}\n`;
+            details += `🏠 *پتہ:* ${r.address || 'N/A'}\n`;
             
             await bot.editMessageText(details, {
                 chat_id: chatId,
@@ -76,15 +78,41 @@ bot.on('message', async (msg) => {
                 parse_mode: 'Markdown'
             });
         }
+        
     } catch (error) {
-        console.error(error);
-        await bot.editMessageText(
-            '❌ *نیٹ ورک ایرر*\nAPI مسئلہ ہے، بعد میں کوشش کریں۔',
-            {
-                chat_id: chatId,
-                message_id: statusMsg.message_id,
-                parse_mode: 'Markdown'
+        console.error('API Error:', error.message);
+        
+        // Fallback API (اگر پہلی کام نہ کرے)
+        try {
+            const fallbackResponse = await axios.get(`https://pak-data.herokuapp.com/api/sim?number=${query}`);
+            const fallbackData = fallbackResponse.data;
+            
+            if (fallbackData && fallbackData.success) {
+                let details = `✅ *نمبر کی تفصیلات*\n\n`;
+                details += `👤 *نام:* ${fallbackData.name || 'N/A'}\n`;
+                details += `📞 *نمبر:* ${fallbackData.number || number}\n`;
+                details += `🆔 *CNIC:* ${fallbackData.cnic || 'N/A'}\n`;
+                details += `📡 *آپریٹر:* ${fallbackData.operator || 'N/A'}\n`;
+                
+                await bot.editMessageText(details, {
+                    chat_id: chatId,
+                    message_id: statusMsg.message_id,
+                    parse_mode: 'Markdown'
+                });
+            } else {
+                throw new Error('No data');
             }
-        );
+        } catch (fallbackError) {
+            await bot.editMessageText(
+                '❌ *نیٹ ورک ایرر*\n' +
+                'API مسئلہ ہے، بعد میں کوشش کریں۔\n' +
+                '🚧 ہم مسئلہ حل کر رہے ہیں',
+                {
+                    chat_id: chatId,
+                    message_id: statusMsg.message_id,
+                    parse_mode: 'Markdown'
+                }
+            );
+        }
     }
 });

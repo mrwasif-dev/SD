@@ -1,7 +1,7 @@
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
 
-const bot = new Telegraf('7252431272:AAEQO4xNHo3UE98vWoy5qH_7_6oKrdGkqTk');
+const bot = new Telegraf('8473768451:AAF7xWs6GpigimrIdlQEpQvMRThGEv6xpU8');
 
 bot.start((ctx) => ctx.reply('📱 نمبر لکھیں (بغیر 0 کے)'));
 

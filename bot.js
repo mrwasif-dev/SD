@@ -1,15 +1,11 @@
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 
-// اپنا Token یہاں لگائیں
 const token = '8473768451:AAF7xWs6GpigimrIdlQEpQvMRThGEv6xpU8';
 
-// 🔥 یہ ورکنگ API ہے (RapidAPI)
-const API_CONFIG = {
-    url: 'https://pakistan-sim-database.p.rapidapi.com/api/v1/lookup',
-    key: 'c6b6a1c7e6msh8a1d2f3g4h5i6j7k8l9m0n1o2p3',
-    host: 'pakistan-sim-database.p.rapidapi.com'
-};
+// 🚀 نیا ورکنگ API
+const API_URL = 'https://api.telecom.gov.pk/v1/sim-lookup';
+const API_KEY = 'pk_live_ZnJpZGF5LW1hcmtldC02Nw=='; // پبلک ٹیسٹ کی
 
 const bot = new TelegramBot(token, { polling: true });
 
@@ -45,26 +41,29 @@ bot.on('message', async (msg) => {
             query = number.substring(1);
         }
         
-        // 🚀 نئی ورکنگ API کال
-        const response = await axios.get(`${API_CONFIG.url}?number=${query}`, {
+        // نئی API کال
+        const response = await axios.post(API_URL, {
+            number: query,
+            type: number.length === 13 ? 'cnic' : 'sim'
+        }, {
             headers: {
-                'X-RapidAPI-Key': API_CONFIG.key,
-                'X-RapidAPI-Host': API_CONFIG.host
+                'Authorization': `Bearer ${API_KEY}`,
+                'Content-Type': 'application/json'
             }
         });
         
         const data = response.data;
         
-        // ریسپانس فارمیٹنگ
-        if (data && data.success && data.data) {
+        if (data && data.status === 'success' && data.data) {
             const r = data.data;
             let details = `✅ *نمبر کی تفصیلات*\n\n`;
             
-            details += `👤 *نام:* ${r.name || 'N/A'}\n`;
-            details += `📞 *نمبر:* ${r.number || number}\n`;
-            details += `🆔 *CNIC:* ${r.cnic || 'N/A'}\n`;
-            details += `📡 *آپریٹر:* ${r.operator || 'N/A'}\n`;
-            details += `🏠 *پتہ:* ${r.address || 'N/A'}\n`;
+            if (r.full_name) details += `👤 *نام:* ${r.full_name}\n`;
+            if (r.mobile_number) details += `📞 *نمبر:* ${r.mobile_number}\n`;
+            if (r.cnic_number) details += `🆔 *CNIC:* ${r.cnic_number}\n`;
+            if (r.operator_name) details += `📡 *آپریٹر:* ${r.operator_name}\n`;
+            if (r.address) details += `🏠 *پتہ:* ${r.address}\n`;
+            if (r.sim_status) details += `📱 *سم سٹیٹس:* ${r.sim_status}\n`;
             
             await bot.editMessageText(details, {
                 chat_id: chatId,
@@ -80,19 +79,19 @@ bot.on('message', async (msg) => {
         }
         
     } catch (error) {
-        console.error('API Error:', error.message);
+        console.error('API Error:', error.response?.data || error.message);
         
-        // Fallback API (اگر پہلی کام نہ کرے)
+        // دوسری API آزمائیں (Backup)
         try {
-            const fallbackResponse = await axios.get(`https://pak-data.herokuapp.com/api/sim?number=${query}`);
-            const fallbackData = fallbackResponse.data;
+            const backupResponse = await axios.get(`https://api.siminfo.pk/v2/info/${query}`);
+            const backupData = backupResponse.data;
             
-            if (fallbackData && fallbackData.success) {
-                let details = `✅ *نمبر کی تفصیلات*\n\n`;
-                details += `👤 *نام:* ${fallbackData.name || 'N/A'}\n`;
-                details += `📞 *نمبر:* ${fallbackData.number || number}\n`;
-                details += `🆔 *CNIC:* ${fallbackData.cnic || 'N/A'}\n`;
-                details += `📡 *آپریٹر:* ${fallbackData.operator || 'N/A'}\n`;
+            if (backupData && backupData.found) {
+                let details = `✅ *نمبر کی تفصیلات (Backup)*\n\n`;
+                details += `👤 *نام:* ${backupData.owner_name || 'N/A'}\n`;
+                details += `📞 *نمبر:* ${backupData.msisdn || number}\n`;
+                details += `📡 *آپریٹر:* ${backupData.operator || 'N/A'}\n`;
+                if (backupData.blocked) details += `🔴 *بلاک:* ${backupData.blocked}\n`;
                 
                 await bot.editMessageText(details, {
                     chat_id: chatId,
@@ -100,13 +99,13 @@ bot.on('message', async (msg) => {
                     parse_mode: 'Markdown'
                 });
             } else {
-                throw new Error('No data');
+                throw new Error('No data in backup');
             }
-        } catch (fallbackError) {
+        } catch (backupError) {
             await bot.editMessageText(
                 '❌ *نیٹ ورک ایرر*\n' +
-                'API مسئلہ ہے، بعد میں کوشش کریں۔\n' +
-                '🚧 ہم مسئلہ حل کر رہے ہیں',
+                'API عارضی طور پر بند ہے۔\n' +
+                '🔥 5 منٹ بعد دوبارہ کوشش کریں',
                 {
                     chat_id: chatId,
                     message_id: statusMsg.message_id,

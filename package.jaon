@@ -1,7 +1,12 @@
+# 1️⃣ پہلے چیک کریں کہ package.json موجود ہے یا نہیں
+ls package.json
+
+# اگر نہیں ہے تو نیا بنائیں
+cat > package.json << 'EOF'
 {
   "name": "telegram-sim-bot",
   "version": "1.0.0",
-  "description": "پاکستان سم اور CNIC چیک کرنے والا ٹیلیگرام بوٹ",
+  "description": "Telegram SIM Checker Bot",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
@@ -14,3 +19,12 @@
     "node": "18.x"
   }
 }
+EOF
+
+# 2️⃣ dependencies انسٹال کریں
+npm install
+
+# 3️⃣ Git میں شامل کریں اور دوبارہ deploy کریں
+git add package.json package-lock.json
+git commit -m "Add package.json for Node.js detection"
+git push heroku main

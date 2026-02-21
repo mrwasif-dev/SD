@@ -3,7 +3,7 @@ const axios = require('axios');
 const fs = require('fs');
 
 // ⚠️ اپنا Bot Token یہاں لگائیں
-const BOT_TOKEN = 'YOUR_BOT_TOKEN_HERE';  // اپنا ٹوکن یہاں ڈالیں
+const BOT_TOKEN = '8473768451:AAF7xWs6GpigimrIdlQEpQvMRThGEv6xpU8';  // اپنا ٹوکن یہاں ڈالیں
 
 // API URL
 const API_URL = 'https://arslan-apis.vercel.app/more/database';

@@ -3,55 +3,47 @@ const axios = require('axios');
 
 const bot = new Telegraf('8473768451:AAF7xWs6GpigimrIdlQEpQvMRThGEv6xpU8');
 
-console.log('🇵🇰 E3-HACKER PAKISTAN SIM DATABASE BOT');
+console.log('🇵🇰 E3-HACKER PAKISTAN DATABASE BOT');
 
-// پاکستانی نمبر نارملائز کرنے کا فنکشن
-function formatPakistaniNumber(input) {
-    // تمام غیر عددی حروف ہٹائیں
+// CNIC چیک
+function isCNIC(input) {
+    let clean = input.replace(/\D/g, '');
+    if (clean.length === 13) return true;
+    if (input.includes('-')) {
+        let parts = input.split('-');
+        if (parts.length === 3 && parts.join('').length === 13) return true;
+    }
+    return false;
+}
+
+// فون نمبر نارملائز
+function formatPhone(input) {
     let num = input.replace(/\D/g, '');
-    
     if (!num) return null;
     
-    // کیس 1: 03001234567 (11 digits with 0)
-    if (num.startsWith('03') && num.length === 11) {
-        return num.substring(1); // 3001234567
+    if (num.startsWith('03') && num.length === 11) return num.substring(1);
+    if (num.startsWith('3') && num.length === 10) return num;
+    if (num.startsWith('92') && num.length === 12) return num.substring(2);
+    if (num.startsWith('0092') && num.length === 14) return num.substring(4);
+    return null;
+}
+
+// CNIC نارملائز
+function formatCNIC(input) {
+    let clean = input.replace(/\D/g, '');
+    if (clean.length === 13) {
+        return `${clean.slice(0,5)}-${clean.slice(5,12)}-${clean.slice(12)}`;
     }
-    
-    // کیس 2: 3001234567 (10 digits without 0)
-    if (num.startsWith('3') && num.length === 10) {
-        return num;
-    }
-    
-    // کیس 3: 923001234567 (12 digits with 92)
-    if (num.startsWith('92') && num.length === 12) {
-        return num.substring(2); // 3001234567
-    }
-    
-    // کیس 4: +923001234567 (13 digits with +)
-    if (num.startsWith('92') && num.length === 12) {
-        return num.substring(2);
-    }
-    
-    // کیس 5: 00923001234567 (14 digits with 00)
-    if (num.startsWith('0092') && num.length === 14) {
-        return num.substring(4); // 3001234567
-    }
-    
-    // اگر کوئی اور فارمیٹ ہے تو null return
     return null;
 }
 
 bot.start((ctx) => {
     ctx.reply(
-        '🇵🇰 **پاکستان سم ڈیٹا بیس** 🇵🇰\n\n' +
-        '📱 **موبائل نمبر لکھیں**\n\n' +
-        '✅ **قبول شدہ فارمیٹس:**\n' +
+        '🇵🇰 **پاکستان ڈیٹا بیس** 🇵🇰\n\n' +
+        '📱 **فون نمبر** یا 🆔 **CNIC** لکھیں\n\n' +
+        '📌 **مثال:**\n' +
         '• 3001234567\n' +
-        '• 03001234567\n' +
-        '• 923001234567\n' +
-        '• +923001234567\n' +
-        '• 00923001234567\n\n' +
-        '⚠️ **صرف پاکستانی نمبر**'
+        '• 42101-1234567-8'
     );
 });
 
@@ -59,92 +51,122 @@ bot.on('text', async (ctx) => {
     const text = ctx.message.text;
     if (text.startsWith('/')) return;
     
-    // نمبر کو نارملائز کریں
-    const normalized = formatPakistaniNumber(text);
-    
-    if (!normalized) {
-        return ctx.reply(
-            '❌ **غلط نمبر فارمیٹ**\n\n' +
-            'صرف پاکستانی نمبر درج کریں:\n' +
-            '✅ 3001234567\n' +
-            '✅ 03001234567\n' +
-            '✅ 923001234567\n' +
-            '✅ +923001234567\n' +
-            '✅ 00923001234567'
-        );
+    // 🔍 CNIC چیک
+    if (isCNIC(text)) {
+        const cnic = formatCNIC(text);
+        console.log(`🔍 CNIC تلاش: ${cnic}`);
+        
+        const msg = await ctx.reply(`🆔 CNIC **${cnic}** تلاش ہو رہا ہے...`);
+        
+        try {
+            // یہاں وہ API لگے گی جو CNIC پر رجسٹرڈ نمبر دیتی ہے
+            // فی الحال Mock Data
+            await showCNICData(ctx, msg, cnic);
+            
+        } catch (error) {
+            await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, '⚠️ سرور کنکشن میں مسئلہ');
+        }
+        return;
     }
     
-    console.log(`🔍 تلاش: ${text} -> ${normalized}`);
-    const msg = await ctx.reply(`🔍 ${normalized} تلاش ہو رہا ہے...`);
+    // 📱 فون نمبر چیک
+    const phone = formatPhone(text);
+    if (!phone) {
+        return ctx.reply('❌ غلط فارمیٹ');
+    }
+    
+    console.log(`🔍 فون تلاش: ${phone}`);
+    const msg = await ctx.reply(`📱 **${phone}** تلاش ہو رہا ہے...`);
     
     try {
-        const res = await axios.get(`https://arslan-apis.vercel.app/more/database?number=${normalized}`, {
+        // پہلے نمبر کا ڈیٹا لیتے ہیں
+        const res = await axios.get(`https://arslan-apis.vercel.app/more/database?number=${phone}`, {
             timeout: 10000
         });
         
         if (!res.data.status || !res.data.result?.length) {
-            return ctx.telegram.editMessageText(
-                ctx.chat.id, 
-                msg.message_id, 
-                null, 
-                `❌ **${normalized}** کے لیے کوئی ڈیٹا نہیں ملا`
-            );
+            return ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, `❌ ${phone} کا ڈیٹا نہیں ملا`);
         }
         
-        let response = `✅ **نمبر:** ${normalized}\n`;
-        response += `📊 **کل ریکارڈز:** ${res.data.result.length}\n\n`;
+        // نمبر کا مالک (پہلا ریکارڈ)
+        const owner = res.data.result[0];
+        const ownerCNIC = owner.cnic?.replace(/\D/g, '') || '';
         
-        res.data.result.forEach((item, i) => {
-            response += `*${i+1}. ${item.full_name || 'نام نامعلوم'}*\n`;
-            response += `📞 ${item.phone || 'N/A'}\n`;
-            response += `🆔 ${item.cnic || 'N/A'}\n`;
-            response += `📍 ${item.address || 'N/A'}\n`;
-            if (i < res.data.result.length - 1) response += `──────────\n`;
-        });
+        let response = `👤 **مالک:** ${owner.full_name || 'نام نامعلوم'}\n`;
+        response += `🆔 **CNIC:** ${owner.cnic || 'N/A'}\n`;
+        response += `📍 **پتہ:** ${owner.address || 'N/A'}\n\n`;
+        
+        if (ownerCNIC.length === 13) {
+            response += `📱 **اس CNIC پر رجسٹرڈ نمبر:**\n\n`;
+            
+            // یہاں وہ API لگے گی جو CNIC کے تمام نمبر دیتی ہے
+            // فی الحال Mock Data
+            const registeredNumbers = getMockNumbersForCNIC(ownerCNIC, phone);
+            
+            registeredNumbers.forEach((num, i) => {
+                response += `${i+1}. 📞 ${num.number}\n`;
+                response += `   👤 ${num.name}\n`;
+                response += `   📍 ${num.address}\n`;
+                if (i < registeredNumbers.length - 1) response += `   ──────────\n`;
+            });
+        }
         
         await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, response);
-        console.log(`✅ کامیاب: ${normalized}`);
+        console.log(`✅ کامیاب: ${phone}`);
         
     } catch (error) {
         console.log(`❌ Error: ${error.message}`);
-        await ctx.telegram.editMessageText(
-            ctx.chat.id, 
-            msg.message_id, 
-            null, 
-            '⚠️ **سرور کنکشن میں مسئلہ**\nبراہ کرم تھوڑی دیر بعد کوشش کریں'
-        );
+        await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, '⚠️ سرور کنکشن میں مسئلہ');
     }
 });
 
-bot.help((ctx) => {
-    ctx.reply(
-        '📌 **رہنمائی**\n\n' +
-        '🇵🇰 **پاکستانی نمبر فارمیٹس:**\n' +
-        '• 3001234567\n' +
-        '• 03001234567\n' +
-        '• 923001234567\n' +
-        '• +923001234567\n' +
-        '• 00923001234567\n\n' +
-        '⚠️ **نوٹ:** صرف پاکستانی نمبرز'
-    );
-});
+// Mock Data فنکشن (جب تک API نہیں ملتی)
+function getMockNumbersForCNIC(cnic, currentPhone) {
+    const mockDB = {
+        '4210112345678': [
+            { number: '3001234567', name: 'John Alexander', address: 'Lahore' },
+            { number: '3217654321', name: 'John Alexander', address: 'Lahore' },
+            { number: '3335557777', name: 'John Alexander', address: 'Lahore' }
+        ],
+        '3520212345671': [
+            { number: '3105551234', name: 'Sarah Johnson', address: 'Islamabad' },
+            { number: '3456789012', name: 'Sarah Johnson', address: 'Islamabad' }
+        ]
+    };
+    
+    // فلٹر کریں کہ جو نمبر پہلے سے دکھایا وہ دوبارہ نہ دکھے
+    let numbers = mockDB[cnic] || [];
+    return numbers.filter(n => n.number !== currentPhone);
+}
 
-// بوٹ اسٹارٹ
-bot.launch({
-    polling: {
-        timeout: 30
+// CNIC ڈیٹا دکھانے کا فنکشن
+async function showCNICData(ctx, msg, cnic) {
+    // یہاں CNIC API کال ہوگی
+    // فی الحال Mock Data
+    
+    const cleanCNIC = cnic.replace(/\D/g, '');
+    const numbers = getMockNumbersForCNIC(cleanCNIC, '');
+    
+    if (numbers.length === 0) {
+        return ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, `🆔 ${cnic}\n\n❌ کوئی نمبر رجسٹر نہیں`);
     }
-}).then(() => {
-    console.log('✅ بوٹ چل رہا ہے!');
-    console.log('🤖 Username: @' + bot.botInfo?.username);
-}).catch(err => {
-    console.log('❌ خرابی:', err.message);
-});
+    
+    let response = `🆔 **CNIC:** ${cnic}\n`;
+    response += `📊 **کل نمبر:** ${numbers.length}\n\n`;
+    
+    numbers.forEach((num, i) => {
+        response += `${i+1}. 📞 ${num.number}\n`;
+        response += `   👤 ${num.name}\n`;
+        response += `   📍 ${num.address}\n`;
+        if (i < numbers.length - 1) response += `   ──────────\n`;
+    });
+    
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, response);
+}
 
-// Heroku زندہ رکھیں
-setInterval(() => {
-    console.log('💓 بوٹ زندہ ہے:', new Date().toISOString());
-}, 30000);
+bot.launch({ polling: { timeout: 30 } })
+    .then(() => console.log('✅ بوٹ چل رہا ہے!'));
 
+setInterval(() => console.log('💓 زندہ:', new Date().toISOString()), 30000);
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));

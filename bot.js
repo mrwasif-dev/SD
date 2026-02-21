@@ -1,10 +1,22 @@
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 
-// اپنا Token یہاں لگائیں
 const token = '8473768451:AAF7xWs6GpigimrIdlQEpQvMRThGEv6xpU8';
-const API_KEY = '49d32e2308c704f3fa';
-const API_URL = 'https://api.nexoracle.com/details/pak-sim-database';
+
+// 🔴 اِن میں سے کوئی ایک API استعمال کریں
+const API_CONFIGS = {
+    free: {
+        url: 'https://api.nexoracle.com/details/pak-sim-database-free',
+        key: 'free_key@maher_apis'
+    },
+    original: {
+        url: 'https://api.nexoracle.com/details/pak-sim-database',
+        key: '49d32e2308c704f3fa'
+    }
+};
+
+// فی الحال Free API استعمال کریں
+const ACTIVE_API = API_CONFIGS.free;
 
 const bot = new TelegramBot(token, { polling: true });
 
@@ -40,7 +52,7 @@ bot.on('message', async (msg) => {
             query = number.substring(1);
         }
         
-        const response = await axios.get(`${API_URL}?apikey=${API_KEY}&q=${query}`);
+        const response = await axios.get(`${ACTIVE_API.url}?apikey=${ACTIVE_API.key}&q=${query}`);
         const data = response.data;
         
         if (data.result && typeof data.result === 'object') {
@@ -65,10 +77,14 @@ bot.on('message', async (msg) => {
             });
         }
     } catch (error) {
-        await bot.editMessageText('❌ *نیٹ ورک ایرر*', {
-            chat_id: chatId,
-            message_id: statusMsg.message_id,
-            parse_mode: 'Markdown'
-        });
+        console.error(error);
+        await bot.editMessageText(
+            '❌ *نیٹ ورک ایرر*\nAPI مسئلہ ہے، بعد میں کوشش کریں۔',
+            {
+                chat_id: chatId,
+                message_id: statusMsg.message_id,
+                parse_mode: 'Markdown'
+            }
+        );
     }
 });

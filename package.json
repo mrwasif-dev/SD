@@ -1,16 +1,12 @@
 {
-  "name": "telegram-sim-bot",
+  "name": "sim-bot",
   "version": "1.0.0",
-  "description": "Telegram SIM Database Bot",
-  "main": "telegram-bot.js",
+  "main": "bot.js",
   "scripts": {
-    "start": "node telegram-bot.js"
+    "start": "node bot.js"
   },
   "dependencies": {
-    "telegraf": "^4.12.2",
-    "axios": "^1.4.0"
-  },
-  "engines": {
-    "node": "18.x"
+    "telegraf": "4.12.2",
+    "axios": "1.4.0"
   }
 }

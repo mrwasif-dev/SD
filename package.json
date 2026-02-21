@@ -1,17 +1,16 @@
 {
   "name": "telegram-sim-bot",
   "version": "1.0.0",
-  "description": "Telegram SIM Database Bot by E3-HACKER",
-  "main": "telegram-sim-bot.js",
+  "description": "Telegram SIM Database Bot",
+  "main": "telegram-bot.js",
   "scripts": {
-    "start": "node telegram-sim-bot.js",
-    "dev": "nodemon telegram-sim-bot.js"
+    "start": "node telegram-bot.js"
   },
   "dependencies": {
     "telegraf": "^4.12.2",
     "axios": "^1.4.0"
   },
-  "devDependencies": {
-    "nodemon": "^2.0.22"
+  "engines": {
+    "node": "18.x"
   }
 }

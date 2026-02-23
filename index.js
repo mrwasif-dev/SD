@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 // ============= CONFIGURATION =============
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || 'YOUR_TELEGRAM_BOT_TOKEN';
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8473768451:AAF7xWs6GpigimrIdlQEpQvMRThGEv6xpU8';
 const SESSION_DIR = path.join(__dirname, 'session');
 
 // Create session directory

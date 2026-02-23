@@ -1,20 +1,20 @@
 {
-  "name": "telegram-whatsapp-bot-pairing",
+  "name": "telegram-whatsapp-bot",
   "version": "1.0.0",
-  "description": "Telegram to WhatsApp Video Forwarder with Pairing Code",
+  "description": "Telegram to WhatsApp Video Forwarder Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "postinstall": "echo 'Installed'"
   },
   "dependencies": {
     "telegram-node-bot": "^4.0.5",
     "whatsapp-web.js": "^1.22.0",
     "axios": "^1.6.0",
-    "fs": "0.0.1-security",
-    "path": "^0.12.7"
+    "qrcode-terminal": "^0.12.0",
+    "puppeteer": "^21.0.0"
   },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
+  "engines": {
+    "node": "18.x"
   }
 }

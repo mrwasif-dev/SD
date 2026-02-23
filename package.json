@@ -1,12 +1,20 @@
 {
-  "name": "sim-bot",
+  "name": "telegram-whatsapp-bot-pairing",
   "version": "1.0.0",
-  "main": "bot.js",
+  "description": "Telegram to WhatsApp Video Forwarder with Pairing Code",
+  "main": "index.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "dependencies": {
-    "telegraf": "4.12.2",
-    "axios": "1.4.0"
+    "telegram-node-bot": "^4.0.5",
+    "whatsapp-web.js": "^1.22.0",
+    "axios": "^1.6.0",
+    "fs": "0.0.1-security",
+    "path": "^0.12.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
   }
 }

@@ -1,7 +1,9 @@
 {
   "name": "whatsapp-bot",
   "version": "1.0.0",
+  "description": "WhatsApp Bot using Baileys",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },
@@ -11,9 +13,9 @@
     "express": "^4.18.2",
     "axios": "^1.6.0",
     "mongodb": "^5.9.0",
-    "pino": "^8.0.0"
+    "pino": "^8.17.0"
   },
   "engines": {
-    "node": "18.x"
+    "node": "20.x"
   }
 }

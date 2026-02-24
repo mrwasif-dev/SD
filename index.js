@@ -3,6 +3,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 const axios = require('axios');
 const { MongoClient } = require('mongodb');
+const crypto = require('crypto'); // ✅ Crypto added
 const pino = require('pino');
 
 const app = express();
@@ -81,17 +82,15 @@ bot.onText(/\/start/, (msg) => {
     );
 });
 
-// /pair command - FIXED VERSION
+// /pair command - FIXED with crypto
 bot.onText(/\/pair (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
-    let phoneNumber = match[1].replace(/\D/g, ''); // Remove non-digits
+    let phoneNumber = match[1].replace(/\D/g, '');
     
-    // Format phone number (remove leading 0 if any)
     if (phoneNumber.startsWith('0')) {
         phoneNumber = phoneNumber.substring(1);
     }
     
-    // Add country code if missing (default 92 for Pakistan)
     if (!phoneNumber.startsWith('92')) {
         phoneNumber = '92' + phoneNumber;
     }
@@ -102,7 +101,7 @@ bot.onText(/\/pair (.+)/, async (msg, match) => {
         // Create new auth state
         const { state, saveCreds } = await useMultiFileAuthState(`auth_${Date.now()}`);
         
-        // Create socket
+        // Create socket with crypto
         const pairingSock = makeWASocket({
             auth: state,
             printQRInTerminal: false,
@@ -110,33 +109,29 @@ bot.onText(/\/pair (.+)/, async (msg, match) => {
             logger: pino({ level: 'silent' })
         });
 
-        // Wait for socket to be ready
+        // Wait for socket
         setTimeout(async () => {
             try {
                 // Request pairing code
                 const pairingCode = await pairingSock.requestPairingCode(phoneNumber);
                 
                 if (pairingCode) {
-                    // Format code nicely
                     const formattedCode = pairingCode.match(/.{1,4}/g)?.join('-') || pairingCode;
                     
                     await bot.sendMessage(chatId, 
-                        `✅ *Pairing Code Generated!*\n\n` +
-                        `📱 *Phone:* +${phoneNumber}\n` +
-                        `🔢 *Code:* \`${formattedCode}\`\n\n` +
-                        `*How to connect:*\n` +
-                        `1️⃣ Open WhatsApp on your phone\n` +
-                        `2️⃣ Tap Menu (⋮) → Linked Devices\n` +
-                        `3️⃣ Tap "Link with phone number"\n` +
-                        `4️⃣ Enter this code: *${formattedCode}*\n\n` +
-                        `_Code expires in 5 minutes_`,
+                        `✅ *SUCCESS!*\n\n` +
+                        `🔢 *Code:* \`${formattedCode}\`\n` +
+                        `📱 *Phone:* +${phoneNumber}\n\n` +
+                        `*Steps:*\n` +
+                        `1. Open WhatsApp > Menu > Linked Devices\n` +
+                        `2. Tap "Link with phone number"\n` +
+                        `3. Enter this code: *${formattedCode}*`,
                         { parse_mode: 'Markdown' }
                     );
                     
-                    // Save socket for later use
                     sock = pairingSock;
                     
-                    // Save session to MongoDB when connected
+                    // Save session
                     pairingSock.ev.on('creds.update', async () => {
                         try {
                             const creds = JSON.stringify(state.creds);
@@ -145,16 +140,15 @@ bot.onText(/\/pair (.+)/, async (msg, match) => {
                                 { $set: { session: creds, phoneNumber: phoneNumber } },
                                 { upsert: true }
                             );
-                            console.log('💾 Session saved to MongoDB');
                         } catch (err) {}
                     });
                     
-                    // Notify when connected
+                    // Connection success
                     pairingSock.ev.on('connection.update', (update) => {
                         const { connection } = update;
                         if (connection === 'open') {
                             bot.sendMessage(chatId, 
-                                '✅ *WhatsApp Connected Successfully!*\n\nNow send any video/photo to forward!',
+                                '✅ *WhatsApp Connected!*\n\nNow send videos/photos to forward!',
                                 { parse_mode: 'Markdown' }
                             );
                         }
@@ -167,16 +161,12 @@ bot.onText(/\/pair (.+)/, async (msg, match) => {
             } catch (error) {
                 console.log('Pairing error:', error.message);
                 await bot.sendMessage(chatId, 
-                    `❌ *Failed to generate code*\n\n` +
-                    `*Reason:* ${error.message}\n\n` +
-                    `*Try:*\n` +
-                    `• Check phone number format\n` +
-                    `• Use /pair 923001234567\n` +
-                    `• Try again in 1 minute`,
+                    `❌ *Error:* ${error.message}\n\n` +
+                    `*Try again with:* /pair 92XXXXXXXXXX`,
                     { parse_mode: 'Markdown' }
                 );
             }
-        }, 2000);
+        }, 3000);
         
     } catch (error) {
         await bot.sendMessage(chatId, 
@@ -199,7 +189,7 @@ bot.on('message', async (msg) => {
         }
         
         try {
-            await bot.sendMessage(chatId, '⏳ *Sending to WhatsApp...*', { parse_mode: 'Markdown' });
+            await bot.sendMessage(chatId, '⏳ *Sending...*', { parse_mode: 'Markdown' });
             
             const caption = msg.caption || '';
             const fileId = msg.video ? msg.video.file_id : msg.photo.pop().file_id;
@@ -215,7 +205,7 @@ bot.on('message', async (msg) => {
                 caption: caption
             });
             
-            await bot.sendMessage(chatId, '✅ *Sent to WhatsApp!*', { parse_mode: 'Markdown' });
+            await bot.sendMessage(chatId, '✅ *Sent!*', { parse_mode: 'Markdown' });
             
         } catch (error) {
             await bot.sendMessage(chatId, 

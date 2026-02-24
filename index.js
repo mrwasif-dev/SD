@@ -1,9 +1,10 @@
+// ✅ سب سے پہلے crypto import کریں
+const crypto = require('crypto');
 const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 const axios = require('axios');
 const { MongoClient } = require('mongodb');
-const crypto = require('crypto'); // ✅ Crypto added
 const pino = require('pino');
 
 const app = express();
@@ -19,8 +20,12 @@ let sock = null;
 let db = null;
 
 // Initialize Telegram Bot
-bot = new TelegramBot(telegramToken, { polling: true });
-console.log('✅ Telegram Bot Started');
+try {
+    bot = new TelegramBot(telegramToken, { polling: true });
+    console.log('✅ Telegram Bot Started');
+} catch (error) {
+    console.log('❌ Telegram Error:', error.message);
+}
 
 // Connect to MongoDB
 async function connectDB() {
@@ -82,15 +87,15 @@ bot.onText(/\/start/, (msg) => {
     );
 });
 
-// /pair command - FIXED with crypto
+// /pair command - FINAL FIXED VERSION
 bot.onText(/\/pair (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
     let phoneNumber = match[1].replace(/\D/g, '');
     
+    // Format number
     if (phoneNumber.startsWith('0')) {
         phoneNumber = phoneNumber.substring(1);
     }
-    
     if (!phoneNumber.startsWith('92')) {
         phoneNumber = '92' + phoneNumber;
     }
@@ -98,10 +103,10 @@ bot.onText(/\/pair (.+)/, async (msg, match) => {
     await bot.sendMessage(chatId, `🔄 *Generating pairing code for +${phoneNumber}...*`, { parse_mode: 'Markdown' });
     
     try {
-        // Create new auth state
+        // ✅ FIX: Proper auth state
         const { state, saveCreds } = await useMultiFileAuthState(`auth_${Date.now()}`);
         
-        // Create socket with crypto
+        // ✅ Create socket
         const pairingSock = makeWASocket({
             auth: state,
             printQRInTerminal: false,
@@ -109,10 +114,10 @@ bot.onText(/\/pair (.+)/, async (msg, match) => {
             logger: pino({ level: 'silent' })
         });
 
-        // Wait for socket
+        // ✅ Wait and generate code
         setTimeout(async () => {
             try {
-                // Request pairing code
+                // ✅ Request pairing code
                 const pairingCode = await pairingSock.requestPairingCode(phoneNumber);
                 
                 if (pairingCode) {
@@ -125,7 +130,7 @@ bot.onText(/\/pair (.+)/, async (msg, match) => {
                         `*Steps:*\n` +
                         `1. Open WhatsApp > Menu > Linked Devices\n` +
                         `2. Tap "Link with phone number"\n` +
-                        `3. Enter this code: *${formattedCode}*`,
+                        `3. Enter code: *${formattedCode}*`,
                         { parse_mode: 'Markdown' }
                     );
                     
@@ -148,21 +153,18 @@ bot.onText(/\/pair (.+)/, async (msg, match) => {
                         const { connection } = update;
                         if (connection === 'open') {
                             bot.sendMessage(chatId, 
-                                '✅ *WhatsApp Connected!*\n\nNow send videos/photos to forward!',
+                                '✅ *WhatsApp Connected!*\n\nNow send videos/photos!',
                                 { parse_mode: 'Markdown' }
                             );
                         }
                     });
                     
-                } else {
-                    throw new Error('No code received');
                 }
-                
             } catch (error) {
-                console.log('Pairing error:', error.message);
+                console.log('Pairing error:', error);
                 await bot.sendMessage(chatId, 
                     `❌ *Error:* ${error.message}\n\n` +
-                    `*Try again with:* /pair 92XXXXXXXXXX`,
+                    `Try: /pair 92XXXXXXXXXX`,
                     { parse_mode: 'Markdown' }
                 );
             }

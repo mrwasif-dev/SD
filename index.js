@@ -1,131 +1,90 @@
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const TelegramBot = require('node-telegram-bot-api');
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const express = require('express');
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
+const { MongoClient } = require('mongodb');
+const app = express();
 
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || 'YOUR_TOKEN';
-const SESSION_DIR = path.join(__dirname, 'session');
+// Environment Variables
+const telegramToken = process.env.TELEGRAM_TOKEN;
+const targetNumber = process.env.TARGET_NUMBER;
+const mongoUrl = process.env.MONGODB_URL;
 
-if (!fs.existsSync(SESSION_DIR)) fs.mkdirSync(SESSION_DIR);
+const bot = new TelegramBot(telegramToken, { polling: true });
+let sock = null;
+let db = null;
 
-const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
-
-const whatsapp = new Client({
-    authStrategy: new LocalAuth({ dataPath: SESSION_DIR }),
-    puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] }
+// Connect to MongoDB
+MongoClient.connect(mongoUrl).then(client => {
+  db = client.db('whatsapp_bot');
+  console.log('✅ MongoDB connected');
 });
 
-let userStates = {};
-
-// WhatsApp Events
-whatsapp.on('ready', () => {
-    console.log('✅ WhatsApp Connected!');
-    Object.keys(userStates).forEach(chatId => {
-        if (userStates[chatId]?.waiting) {
-            bot.sendMessage(chatId, '✅ *WhatsApp Connected!*\nSend videos now.');
-            delete userStates[chatId];
-        }
+// /pair command
+bot.onText(/\/pair (.+)/, async (msg, match) => {
+  const phoneNumber = match[1];
+  const chatId = msg.chat.id;
+  
+  try {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+    
+    sock = makeWASocket({
+      auth: state,
+      printQRInTerminal: false
     });
+
+    // Save session to MongoDB
+    sock.ev.on('creds.update', async () => {
+      const creds = JSON.stringify(state);
+      await db.collection('sessions').updateOne(
+        { userId: chatId },
+        { $set: { session: creds } },
+        { upsert: true }
+      );
+    });
+
+    setTimeout(async () => {
+      const code = await sock.requestPairingCode(phoneNumber);
+      bot.sendMessage(chatId, `🔢 Your pairing code: ${code}\nEnter this code in WhatsApp > Linked Devices`);
+    }, 2000);
+
+    sock.ev.on('connection.update', (update) => {
+      const { connection } = update;
+      if (connection === 'open') {
+        bot.sendMessage(chatId, '✅ WhatsApp connected successfully!');
+      }
+    });
+
+  } catch (error) {
+    bot.sendMessage(chatId, '❌ Error: ' + error.message);
+  }
 });
 
-// Telegram Commands
-bot.onText(/\/start/, (msg) => {
-    bot.sendMessage(msg.chat.id, 
-        '*🤖 WhatsApp Bot*\n\n/pair - Connect WhatsApp\n/status - Check status\n\nSend any video!');
-});
-
-bot.onText(/\/pair/, (msg) => {
-    userStates[msg.chat.id] = { step: 'waiting_number' };
-    bot.sendMessage(msg.chat.id, '📱 Send your number (e.g., 923001234567):');
-});
-
-bot.onText(/\/status/, (msg) => {
-    const connected = whatsapp.info?.wid ? '✅ Connected' : '❌ Not Connected';
-    bot.sendMessage(msg.chat.id, `*Status:* ${connected}`);
-});
-
-// Handle messages
+// Handle videos/photos
 bot.on('message', async (msg) => {
-    const chatId = msg.chat.id;
-    const text = msg.text;
-    
-    if (text?.startsWith('/')) return;
-    
-    // Handle number input
-    if (userStates[chatId]?.step === 'waiting_number') {
-        const number = text.replace(/[^0-9]/g, '');
-        if (number.length < 10) {
-            return bot.sendMessage(chatId, '❌ Invalid number. Try again:');
-        }
-        
-        userStates[chatId] = { step: 'waiting_code', number };
-        bot.sendMessage(chatId, '⏳ Generating code...');
-        
-        try {
-            const code = await whatsapp.requestPairingCode(number);
-            bot.sendMessage(chatId, 
-                `🔐 *Your Code:* \`${code}\`\n\n` +
-                `1️⃣ WhatsApp → ⋮ → Linked Devices\n` +
-                `2️⃣ "Link with phone number instead"\n` +
-                `3️⃣ Enter: *${code}*`);
-            
-            setTimeout(() => {
-                if (userStates[chatId]) delete userStates[chatId];
-            }, 300000);
-        } catch (err) {
-            bot.sendMessage(chatId, `❌ Error: ${err.message}`);
-            delete userStates[chatId];
-        }
-    }
-});
-
-// Handle videos
-bot.on('video', async (msg) => {
-    const chatId = msg.chat.id;
-    
-    if (!whatsapp.info?.wid) {
-        return bot.sendMessage(chatId, '❌ Use /pair first');
-    }
-    
+  if ((msg.video || msg.photo) && sock) {
     try {
-        const status = await bot.sendMessage(chatId, '⏳ Downloading...');
-        
-        const video = msg.video;
-        if (video.file_size > 64 * 1024 * 1024) {
-            return bot.editMessageText('❌ Too large (max 64MB)', {
-                chat_id: chatId, message_id: status.message_id
-            });
-        }
-        
-        const file = await bot.getFile(video.file_id);
-        const url = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${file.file_path}`;
-        const filePath = `/tmp/video_${Date.now()}.mp4`;
-        
-        const response = await axios({ url, method: 'GET', responseType: 'stream' });
-        const writer = fs.createWriteStream(filePath);
-        response.data.pipe(writer);
-        
-        writer.on('finish', async () => {
-            await bot.editMessageText('⏳ Sending to WhatsApp...', {
-                chat_id: chatId, message_id: status.message_id
-            });
-            
-            const media = MessageMedia.fromFilePath(filePath);
-            await whatsapp.sendMessage(whatsapp.info.wid.user + '@c.us', media);
-            
-            await bot.editMessageText('✅ Done!', {
-                chat_id: chatId, message_id: status.message_id
-            });
-            
-            fs.unlinkSync(filePath);
-        });
-    } catch (err) {
-        bot.sendMessage(chatId, `❌ Error: ${err.message}`);
+      const caption = msg.caption || '';
+      const fileId = msg.video ? msg.video.file_id : msg.photo.pop().file_id;
+      const fileLink = await bot.getFileLink(fileId);
+      
+      // Download file
+      const response = await axios.get(fileLink, { responseType: 'arraybuffer' });
+      
+      // Send to WhatsApp
+      await sock.sendMessage(targetNumber + '@s.whatsapp.net', {
+        [msg.video ? 'video' : 'image']: Buffer.from(response.data),
+        caption: caption
+      });
+      
+      bot.sendMessage(msg.chat.id, '✅ Sent to WhatsApp!');
+    } catch (error) {
+      bot.sendMessage(msg.chat.id, '❌ Error: ' + error.message);
     }
+  }
 });
 
-// Start
-console.log('🤖 Starting...');
-whatsapp.initialize();
-console.log('✅ Bot Ready!');
+// Simple status page
+app.get('/', (req, res) => res.send('🤖 WhatsApp Bot is running'));
+const port = process.env.PORT || 5000;
+app.listen(port, () => console.log(`Server running on port ${port}`));
